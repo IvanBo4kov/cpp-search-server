@@ -59,10 +59,10 @@ public:
 
     void AddDocument(int document_id, const string& document) {
         const vector<string> words = SplitIntoWordsNoStop(document);
-        int n = words.size();
+        const double inv_word_count = 1.0 / words.size();
         
         for (const auto& word : words) {
-           word_to_document_freqs_[word][document_id] += 1./n;
+           word_to_document_freqs_[word][document_id] += inv_word_count;
         }
         
         document_count_++;
@@ -117,26 +117,30 @@ private:
         }   
         return query;
     }
+    
+    double ComputeWordInverseDocumentFreq(const string& word) const {
+        return log(document_count_ * 1.0 / word_to_document_freqs_.at(word).size());
+    }
 
     vector<Document> FindAllDocuments(const Query& query_words) const {
         map<int, double> document_to_relevance;
         
-        for (const auto plus_words : query_words.plus) {
-            if (word_to_document_freqs_.count(plus_words) != 0) {
-                const auto& word_freqs = word_to_document_freqs_.at(plus_words);
-                for (const auto& [id, tf] : word_freqs) {
-                    double idf = log(static_cast<double>(document_count_) / word_freqs.size());
-                    document_to_relevance[id] += tf * idf;
-                }
+        for (const auto& plus_words : query_words.plus) {
+            if (word_to_document_freqs_.count(plus_words) == 0) {
+                continue;
+            }
+            double inverse_document_freq = ComputeWordInverseDocumentFreq(plus_words);
+            for (const auto& [document_id, term_freq] : word_to_document_freqs_.at(plus_words)) {
+                document_to_relevance[document_id] += term_freq * inverse_document_freq;
             }
         }
         
-        for (const auto minus_words : query_words.minus) {
-            if (word_to_document_freqs_.count(minus_words) != 0) {
-                const auto& word_freqs = word_to_document_freqs_.at(minus_words);
-                for (const auto& [id, _] : word_freqs) {
-                    document_to_relevance.erase(id);
-                }
+        for (const auto& minus_words : query_words.minus) {
+            if (word_to_document_freqs_.count(minus_words) == 0) {
+                continue;
+            }
+            for (const auto [document_id, term_freq] : word_to_document_freqs_.at(minus_words)) {
+                document_to_relevance.erase(document_id);
             }
         }
         
