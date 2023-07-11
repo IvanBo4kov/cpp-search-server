@@ -83,21 +83,23 @@ class SearchServer {
 public:
     template <typename StringContainer>
     explicit SearchServer(const StringContainer& stop_words) : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
-        for (const auto& word : stop_words_) {
-            if (!IsValidWord(word)) {
-                throw invalid_argument("contents contains special symbols");
-            }
+        if (!all_of(stop_words_.begin(), stop_words_.end(), [](const string& word) {
+                return IsValidWord(word);
+            })) {
+                throw std::invalid_argument("contents contains special symbols");
         }
     }
 
     explicit SearchServer(const string& stop_words_text) : SearchServer(SplitIntoWords(stop_words_text)) {}
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
-       if (document_id < 0) {
+        if (document_id < 0) {
             throw invalid_argument("negative document_id");
-        } else if (documents_.count(document_id) > 0) {
+        }
+        if (documents_.count(document_id) > 0) {
             throw invalid_argument("this document_id already exists");
-        } else if (!IsValidWord(document)) {
+        }
+        if (!IsValidWord(document)) {
             throw invalid_argument("contents contains special symbols");
         }
         
@@ -107,18 +109,11 @@ public:
             word_to_document_freqs_[word][document_id] += inv_word_count;
         }
         documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
+        order_of_ids_.push_back(document_id);
     }
 
     template <typename DocumentPredicate>
     vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const {
-        if (!IsValidWord(raw_query)) {
-            throw invalid_argument("contents contains special symbols");
-        } else if (CountMinus(raw_query) > 1) {
-            throw invalid_argument("more than one '-' before minus words");
-        } else if (raw_query.find('-') == raw_query.length() - 1) {
-            throw invalid_argument("no words after symbol '-'");
-        }
-        
         const Query query = ParseQuery(raw_query);
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
@@ -153,14 +148,6 @@ public:
     }
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
-        if (!IsValidWord(raw_query)) {
-            throw invalid_argument("contents contains special symbols");
-        } else if (CountMinus(raw_query) > 1) {
-            throw invalid_argument("more than one '-' before minus words");
-        } else if (raw_query.find('-') == raw_query.length() - 1) {
-            throw invalid_argument("no words after symbol '-'");
-        }
-        
         const Query query = ParseQuery(raw_query);
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
@@ -186,9 +173,7 @@ public:
     
     int GetDocumentId(int index) const {
         if (index >= 0 && index < static_cast<int>(documents_.size())) {
-            auto it = documents_.begin();
-            std::advance(it, index);
-            return it->first;
+            return order_of_ids_[index];
         } else {
             throw out_of_range("document index out of range");
         }
@@ -202,6 +187,7 @@ private:
     const set<string> stop_words_;
     map<string, map<int, double>> word_to_document_freqs_;
     map<int, DocumentData> documents_;
+    vector<int> order_of_ids_;
 
     bool IsStopWord(const string& word) const {
         return stop_words_.count(word) > 0;
@@ -231,16 +217,23 @@ private:
     };
 
     QueryWord ParseQueryWord(string text) const {
-        if (count(text.begin(), text.end(), '-') == text.size() or !IsValidWord(text) or
-            (text[0] == '-' and text[1] == '-')) {
-            return {text, true, true};
-        }
-        
         bool is_minus = false;
+        
         if (text[0] == '-') {
             is_minus = true;
             text = text.substr(1);
         }
+        
+        if (!IsValidWord(text)) {
+            throw invalid_argument("contents contains special symbols");
+        }
+        if (text[0] == '-') {
+            throw invalid_argument("more than one '-' before minus words");
+        }
+        if (text.empty()) {
+            throw invalid_argument("no words after symbol '-'");
+        }
+        
         return {text, is_minus, IsStopWord(text)};
     }
 
@@ -330,15 +323,14 @@ int main() {
     SearchServer search_server("и в на"s);
     
     try {
-        search_server.AddDocument(1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {7, 2, 7});
-        search_server.AddDocument(1, "пушистый пёс и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
-        search_server.AddDocument(-1, "пушистый пёс и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
-        search_server.AddDocument(3, "большой пёс скво\x12рец"s, DocumentStatus::ACTUAL, {1, 3, 2});
-        
-        int document_id_test = search_server.GetDocumentId(100);
+        search_server.AddDocument(1, "word1"s, DocumentStatus::ACTUAL, {7, 2, 7});
+        search_server.AddDocument(2, "word1 word2 word3"s, DocumentStatus::ACTUAL, {1, 2});
+        search_server.AddDocument(3, "word3"s, DocumentStatus::ACTUAL, {1, 2});
+        search_server.AddDocument(4, "word1 word3 word2"s, DocumentStatus::ACTUAL, {1, 3, 2});
+        int document_id_test = search_server.GetDocumentId(2);
         cout << document_id_test << endl;
         
-        for (const auto& document : search_server.FindTopDocuments("--пушистый"s)) {
+        for (const auto& document : search_server.FindTopDocuments("word1 -word2 -"s)) {
             PrintDocument(document);
         }
     } catch (const invalid_argument& e) {
