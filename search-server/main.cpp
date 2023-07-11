@@ -172,11 +172,7 @@ public:
     }
     
     int GetDocumentId(int index) const {
-        if (index >= 0 && index < static_cast<int>(documents_.size())) {
-            return order_of_ids_[index];
-        } else {
-            throw out_of_range("document index out of range");
-        }
+        return order_of_ids_.at(index);
     }
     
 private:
@@ -227,11 +223,11 @@ private:
         if (!IsValidWord(text)) {
             throw invalid_argument("contents contains special symbols");
         }
-        if (text[0] == '-') {
-            throw invalid_argument("more than one '-' before minus words");
-        }
         if (text.empty()) {
             throw invalid_argument("no words after symbol '-'");
+        }
+        if (text[0] == '-') {
+            throw invalid_argument("more than one '-' before minus words");
         }
         
         return {text, is_minus, IsStopWord(text)};
@@ -327,10 +323,10 @@ int main() {
         search_server.AddDocument(2, "word1 word2 word3"s, DocumentStatus::ACTUAL, {1, 2});
         search_server.AddDocument(3, "word3"s, DocumentStatus::ACTUAL, {1, 2});
         search_server.AddDocument(4, "word1 word3 word2"s, DocumentStatus::ACTUAL, {1, 3, 2});
-        int document_id_test = search_server.GetDocumentId(2);
+        int document_id_test = search_server.GetDocumentId(4);
         cout << document_id_test << endl;
         
-        for (const auto& document : search_server.FindTopDocuments("word1 -word2 -"s)) {
+        for (const auto& document : search_server.FindTopDocuments("word1 -word2"s)) {
             PrintDocument(document);
         }
     } catch (const invalid_argument& e) {
