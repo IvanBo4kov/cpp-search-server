@@ -9,16 +9,16 @@ std::vector<Document> RequestQueue::AddFindRequest(const std::string& raw_query,
 int RequestQueue::GetNoResultRequests() const {
     int count = 0;
     for (const auto& query_result : requests_) {
-        if (query_result.results.empty()) {
+        if (query_result.number_of_documents == 0) {
             ++count;
         }
     }
     return count;
 }
 
-void RequestQueue::AddQueryResult(const std::string& query, const std::vector<Document>& results) {
-        if (requests_.size() == min_in_day_) {
-            requests_.pop_front();
-        }
-        requests_.emplace_back(QueryResult{query, results});
+void RequestQueue::AddQueryResult(const std::string& query, const size_t& results) {
+    if (requests_.size() == min_in_day_) {
+        requests_.pop_front();
     }
+    requests_.emplace_back(QueryResult{query, results});
+}
