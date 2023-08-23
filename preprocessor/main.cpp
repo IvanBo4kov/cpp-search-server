@@ -14,9 +14,6 @@ path operator""_p(const char* data, std::size_t sz) {
     return path(data, data + sz);
 }
 
-static const regex local_include_regex(R"/(\s*#\s*include\s*"([^"]*)"\s*)/");
-static const regex system_include_regex(R"/(\s*#\s*include\s*<([^>]*)>\s*)/");
-
 bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories);
 
 // helper
@@ -51,6 +48,9 @@ bool Preprocess(const path& in_file, const path& out_file, const vector<path>& i
 }
 
 bool ProcessFile(const path& file, ostream& output, const vector<path>& include_directories) {
+    static const regex local_include_regex(R"/(\s*#\s*include\s*"([^"]*)"\s*)/");
+    static const regex system_include_regex(R"/(\s*#\s*include\s*<([^>]*)>\s*)/");
+
     string content = GetFileContents(file);
 
     if (content.empty()) {
